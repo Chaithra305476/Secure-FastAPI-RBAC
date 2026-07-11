@@ -41,8 +41,8 @@ secure-api-rbac/
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/Chaithra305476/secure-fastapi-rbac.git
-cd secure-fastapi-rbac
+git clone https://github.com/Chaithra305476/Secure-FastAPI-RBAC.git
+cd Secure-FastAPI-RBAC
 ```
 
 ### 2. Create a virtual environment

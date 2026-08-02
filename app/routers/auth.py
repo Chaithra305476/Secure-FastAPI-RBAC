@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.orm import Session
 from app.schemas.schemas import UserLogin, TokenResponse, RefreshRequest
@@ -35,8 +36,36 @@ def register(data: UserLogin, db: Session = Depends(get_db)):
 def login(data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == data.username).first()
 
-    if not user or not verify_password(data.password, user.hashed_password):
+    if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    # Check if account is currently locked
+    if user.locked_until and user.locked_until > datetime.utcnow():
+        remaining = int((user.locked_until - datetime.utcnow()).total_seconds() / 60) + 1
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Account locked due to too many failed attempts. Try again in {remaining} minute(s)."
+        )
+
+    # Check password
+    if not verify_password(data.password, user.hashed_password):
+        user.failed_attempts += 1
+
+        if user.failed_attempts >= 5:
+            user.locked_until = datetime.utcnow() + timedelta(minutes=15)
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account locked due to too many failed attempts. Try again in 15 minutes."
+            )
+
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    # Correct password — reset lockout state
+    user.failed_attempts = 0
+    user.locked_until = None
+    db.commit()
 
     token_data = {"sub": user.username, "role": user.role}
     access_token = create_access_token(token_data)
